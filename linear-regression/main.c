@@ -204,20 +204,16 @@ double validate(Dataset d, Vec w, double b) {
   return mse_acc / (d.samples.len - d.training_cuttoff);
 }
 
-#define EPOCHS 10000000
-
 int main(void) {
-  Dataset d = parse_wine_quality_dataset(
-      "./linear-regression/data/winequality-red.csv");
-  // Dataset d =
-  //     parse_boston_housing_dataset("./linear-regression/data/housing.csv");
+  // Dataset d = parse_wine_quality_dataset( "./data/winequality-red.csv");
+  Dataset d = parse_boston_housing_dataset("./data/housing.csv");
 
   normalize_dataset(d);
 
   Vec w = new_vec(d.dimensions);
   double b = 0.0;
   double prev_loss = INFINITY;
-  for (size_t i = 0; i < EPOCHS; i++) {
+  for (size_t i = 0;; i++) {
     gradient_descent(d, 0.0001, w, &b);
 
     if (i % 10 == 0) {
