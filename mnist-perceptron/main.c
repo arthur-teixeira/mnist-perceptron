@@ -3,8 +3,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "../shared/data_structures.h"
-#include "../shared/mnist.h"
+#include "../shared/data_structures.c"
+#include "../shared/mnist.c"
 #include <raylib.h>
 #include <raymath.h>
 

@@ -1,5 +1,5 @@
-#include "../shared/da.h"
-#include "../shared/data_structures.h"
+#include "../shared/da.c"
+#include "../shared/data_structures.c"
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -11,12 +11,12 @@
 #define MAT_SIZE(m) (m).cols *(m).rows
 #define FOREACH_VEC(v) for (size_t i = 0; i < (v).size; i++)
 
-float rand_normal() { return ((float)rand() / (float)RAND_MAX); }
+float rand_uniform() { return ((float)rand() / (float)RAND_MAX); }
 float rand_float_scaled(size_t fan_in, size_t fan_out) {
   // Xavier/Glorot Uniform
   float limit = sqrtf(6.0f / (fan_in + fan_out));
   float scale = 2.0f * limit;
-  return (rand_normal())*scale - limit;
+  return (rand_uniform())*scale - limit;
 }
 
 typedef struct {

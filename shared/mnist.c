@@ -1,11 +1,11 @@
 #ifndef MNIST_H
 #define MNIST_H
 
-#include "data_structures.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 int reverse_int(int i) {
   int c1 = i & 255;

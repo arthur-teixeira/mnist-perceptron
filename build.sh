@@ -7,7 +7,7 @@ if [ -z "$DIR" ] || [ -z "$OUT" ]; then
   exit 1;
 fi
 
-CFLAGS="-Wall -Wextra -ggdb -Ofast `pkg-config --cflags raylib`"
+CFLAGS="-Wall -Wextra -ggdb `pkg-config --cflags raylib`"
 LIBS="`pkg-config --libs raylib` -lm"
 
 echo "Building $DIR -> $OUT"
