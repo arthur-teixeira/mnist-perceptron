@@ -2,6 +2,7 @@
 #include "../shared/mnist.c"
 #include <assert.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,10 +22,18 @@ typedef struct {
 } Pool;
 
 typedef struct {
-  // input len = 23x23x8
-  // nodes = 10 , output
-  Mat weights; // input len by nodes
-  Vec biases;  // len = nodes
+  bool cached;
+  Vec last_input;
+  Vec last_totals;
+  size_t last_volume_size;
+  size_t last_rows;
+  size_t last_cols;
+} Cache;
+
+typedef struct {
+  Mat weights;
+  Vec biases;
+  Cache cache;
 } Softmax;
 
 typedef enum {
@@ -61,6 +70,14 @@ Volume new_volume(size_t size) {
       .size = size,
       .outs = calloc(size, sizeof(Mat)),
   };
+}
+
+void free_volume(Volume v) {
+  for (size_t i = 0; i < v.size; i++) {
+    free_mat(v.outs[i]);
+  }
+
+  free(v.outs);
 }
 
 double relu(double d) {
@@ -221,8 +238,12 @@ Vec flatten_volume(Volume in) {
   return out;
 }
 
-void expv(Vec in, double max) {
+void expv_softmax(Vec in, double max) {
   FOREACH_VEC(in) { VEC_AT(in, i) = exp(VEC_AT(in, i) - max); }
+}
+
+void expv(Vec in) {
+  FOREACH_VEC(in) { VEC_AT(in, i) = exp(VEC_AT(in, i)); }
 }
 
 double sum(Vec in) {
@@ -245,14 +266,33 @@ double dot_column(Vec v, Mat m, size_t i) {
   return acc;
 }
 
-Vec softmax(Softmax s, Volume input) {
-  assert(input.size > 0);
-  Vec flattened = flatten_volume(input);
-  Vec out = new_vec(s.biases.size);
+Vec copy(Vec src) {
+  Vec new = new_vec(src.size);
+  memcpy(new.values, src.values, sizeof(float) * src.size);
+  return new;
+}
 
-  for (size_t i = 0; i < s.biases.size; i++) {
-    double d = dot_column(flattened, s.weights, i);
-    VEC_AT(out, i) = VEC_AT(s.biases, i) + d;
+void cache_input_shape(Softmax *s, Volume input) {
+  s->cache.last_volume_size = input.size;
+  s->cache.last_rows = input.outs[0].rows;
+  s->cache.last_cols = input.outs[0].cols;
+}
+
+void cache_softmax(Softmax *s, Volume input, Vec flat, Vec out) {
+  cache_input_shape(s, input);
+  s->cache.last_input = copy(flat);
+  s->cache.last_totals = copy(out);
+  s->cache.cached = true;
+}
+
+Vec softmax(Softmax *s, Volume input) {
+  Vec flattened = flatten_volume(input);
+
+  Vec out = new_vec(s->biases.size);
+
+  for (size_t i = 0; i < s->biases.size; i++) {
+    double d = dot_column(flattened, s->weights, i);
+    VEC_AT(out, i) = VEC_AT(s->biases, i) + d;
   }
 
   double maxval = out.values[0];
@@ -260,11 +300,40 @@ Vec softmax(Softmax s, Volume input) {
     maxval = fmax(out.values[i], maxval);
   }
 
-  expv(out, maxval);
+  cache_softmax(s, input, flattened, out);
+  expv_softmax(out, maxval);
   divide(out, sum(out));
 
   free_vec(flattened);
   return out;
+}
+
+Vec multiply(Vec v, double m, bool inplace) {
+  Vec out = v;
+  if (!inplace) {
+    out = new_vec(v.size);
+  }
+
+  FOREACH_VEC(out) { VEC_AT(out, i) *= m; }
+  return out;
+}
+
+void softmax_backprop(Softmax *s, Vec d_l_d_out) {
+  assert(s->cache.cached);
+
+  Vec t_exp = copy(s->cache.last_totals);
+  expv(t_exp);
+  double S = sum(t_exp);
+
+  for (size_t i = 0; i < d_l_d_out.size; i++) {
+    if (VEC_AT(d_l_d_out, i) == 0) {
+      continue;
+    }
+
+    Vec d_out_d_t = multiply(t_exp, -VEC_AT(t_exp, i), false);
+    divide(d_out_d_t, S * S);
+    VEC_AT(d_out_d_t, i) = VEC_AT(t_exp, i) * (S - VEC_AT(t_exp, i)) / (S * S);
+  }
 }
 
 Mat vec_to_mat(Vec v) {
@@ -349,12 +418,13 @@ int main() {
       .cols = 2,
       .rows = 2,
   });
-
   Softmax l3 = new_softmax(13 * 13 * 8, 10);
 
   Volume l1out = forward(ss[0].image, l1);
   Volume l2out = forward(l1out, l2);
-  Vec output = softmax(l3, l2out);
+  free_volume(l1out);
+  Vec output = softmax(&l3, l2out);
+  free_volume(l2out);
 
   printf("Finished - [");
   for (size_t i = 0; i < output.size; i++) {
